@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNSアルゴリズム体験シミュレーター</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a0f; }
+  .metric-bar { transition: width 0.4s ease; }
+  .post-card { animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
+  .flash { animation: flash 0.5s ease; }
+  @keyframes flash { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .shake { animation: shake 0.3s ease; }
+  @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-5px); } 75% { transform:translateX(5px); } }
+</style>
+</head>
+<body class="min-h-screen text-white">
+<div class="max-w-2xl mx-auto p-4">
+  <div class="text-center mb-4 pt-2">
+    <h1 class="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">📱 SNSアルゴリズムシミュレーター</h1>
+    <p class="text-gray-500 text-xs mt-1">エンゲージメント最大化 vs 炎上リスクのバランスゲーム</p>
+  </div>
+
+  <!-- Metrics dashboard -->
+  <div class="bg-gray-900 rounded-2xl p-4 mb-4 border border-gray-800">
+    <div class="grid grid-cols-4 gap-3 mb-3">
+      <div class="text-center">
+        <div class="text-xl font-bold text-pink-400" id="m-likes">0</div>
+        <div class="text-gray-500 text-xs">❤️ いいね</div>
+      </div>
+      <div class="text-center">
+        <div class="text-xl font-bold text-blue-400" id="m-followers">100</div>
+        <div class="text-gray-500 text-xs">👥 フォロワー</div>
+      </div>
+      <div class="text-center">
+        <div class="text-xl font-bold text-green-400" id="m-score">0</div>
+        <div class="text-gray-500 text-xs">📊 スコア</div>
+      </div>
+      <div class="text-center">
+        <div class="text-xl font-bold text-red-400" id="m-ban">0%</div>
+        <div class="text-gray-500 text-xs">🚨 BAN危険度</div>
+      </div>
+    </div>
+    <div class="space-y-1.5">
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500 w-16">エンゲージ</span>
+        <div class="flex-1 bg-gray-800 rounded-full h-2">
+          <div id="bar-engage" class="metric-bar h-2 bg-pink-500 rounded-full" style="width:20%"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500 w-16">BAN危険度</span>
+        <div class="flex-1 bg-gray-800 rounded-full h-2">
+          <div id="bar-ban" class="metric-bar h-2 bg-red-500 rounded-full" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2 text-xs text-center" id="status-msg">
+      <span class="text-gray-400">ターン <span id="turn-num">1</span> / 10 &nbsp;|&nbsp; 投稿を選んでゲームを進めよう！</span>
+    </div>
+  </div>
+
+  <!-- Post options -->
+  <div id="post-options" class="space-y-3 mb-4"></div>
+
+  <!-- Event log -->
+  <div class="bg-gray-900/60 rounded-xl p-3 border border-gray-800">
+    <p class="text-gray-500 text-xs mb-2">📋 フィード</p>
+    <div id="event-log" class="space-y-1 max-h-48 overflow-y-auto"></div>
+  </div>
+
+  <!-- Game over -->
+  <div id="game-over" style="display:none" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-8 max-w-sm w-full text-center mx-4">
+      <div class="text-5xl mb-3" id="go-emoji">🏆</div>
+      <h2 class="text-2xl font-bold mb-2" id="go-title">ゲーム終了</h2>
+      <p class="text-gray-400 text-sm mb-2" id="go-desc"></p>
+      <div class="bg-gray-800 rounded-xl p-4 mb-4">
+        <div class="text-3xl font-bold text-purple-400" id="go-score">0</div>
+        <div class="text-gray-500 text-sm">最終スコア</div>
+      </div>
+      <button onclick="startGame()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold transition">🔄 もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+const POST_POOL = [
+  { text: '🌸 今日の桜が最高にきれいだった！', engage: 15, ban: 0, type: '日常' },
+  { text: '🔥 炎上必至！〇〇芸人の闇を暴露！！', engage: 60, ban: 35, type: '煽り' },
+  { text: '😤 電車でマナー悪い人多すぎ問題！みんなはどう思う？', engage: 30, ban: 10, type: '愚痴' },
+  { text: '🍜 ランチで食べたラーメンが絶品でした', engage: 10, ban: 0, type: '日常' },
+  { text: '🤑 【必見】フォローするだけで月収100万！限定情報RT拡散！', engage: 20, ban: 60, type: 'スパム' },
+  { text: '💪 筋トレ100日目！成長記録を見てください', engage: 25, ban: 0, type: '記録' },
+  { text: '😱 信じられない！○○の真実を知ってしまった…（続き有）', engage: 45, ban: 20, type: '煽り' },
+  { text: '🌈 多様性について真剣に考えてみた', engage: 20, ban: 5, type: '社会' },
+  { text: '🎮 ゲームに課金で50万溶かした告白', engage: 50, ban: 5, type: '告白' },
+  { text: '🗳️ 選挙行こう！投票率上げよう！', engage: 15, ban: 3, type: '社会' },
+  { text: '🤯 AIが人間の仕事を全て奪う！？緊急速報', engage: 40, ban: 15, type: '煽り' },
+  { text: '☕ 朝のコーヒーが至高', engage: 8, ban: 0, type: '日常' },
+  { text: '😈 フォロワー数ランキング！下位の人はダメ人間', engage: 35, ban: 45, type: '誹謗' },
+  { text: '📚 読んで良かった本3選', engage: 20, ban: 0, type: '情報' },
+  { text: '😭 彼女と別れた…泣いてもいい？', engage: 55, ban: 2, type: '感情' },
+  { text: '🎉 フォロワー1000人達成！みんなありがとう！', engage: 30, ban: 0, type: '記念' },
+  { text: '💊 ダイエット薬で10kg痩せた！紹介します', engage: 25, ban: 40, type: 'スパム' },
+  { text: '🏠 在宅ワークのルーティンを公開', engage: 22, ban: 0, type: '情報' },
+];
+
+const TYPE_COLORS = {
+  '日常': 'text-green-400', '煽り': 'text-red-400', '愚痴': 'text-orange-400',
+  'スパム': 'text-red-500', '記録': 'text-blue-400', '社会': 'text-cyan-400',
+  '告白': 'text-pink-400', '誹謗': 'text-red-600', '感情': 'text-purple-400',
+  '情報': 'text-blue-300', '記念': 'text-yellow-400'
+};
+
+let state = {};
+
+function startGame() {
+  state = { likes: 0, followers: 100, score: 0, ban: 0, engage: 20, turn: 1, maxTurns: 10, banned: false };
+  document.getElementById('game-over').style.display = 'none';
+  updateMetrics();
+  document.getElementById('event-log').innerHTML = '';
+  renderPosts();
+}
+
+function shuffle(arr) { return [...arr].sort(()=>Math.random()-0.5); }
+
+function renderPosts() {
+  if (state.turn > state.maxTurns || state.banned) return;
+  const opts = shuffle(POST_POOL).slice(0, 3);
+  const container = document.getElementById('post-options');
+  container.innerHTML = '';
+  document.getElementById('turn-num').textContent = state.turn;
+
+  opts.forEach((post, idx) => {
+    const card = document.createElement('div');
+    card.className = 'post-card bg-gray-800/60 border border-gray-700 hover:border-gray-500 rounded-2xl p-4 cursor-pointer transition';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', '投稿を選択: ' + post.text);
+
+    const typeColor = TYPE_COLORS[post.type] || 'text-gray-400';
+    const badgeEl = document.createElement('span');
+    badgeEl.className = 'text-xs px-2 py-0.5 bg-gray-700 rounded-full mr-2 ' + typeColor;
+    badgeEl.textContent = post.type;
+
+    const textEl = document.createElement('p');
+    textEl.className = 'text-sm text-white my-2';
+    textEl.textContent = post.text;
+
+    const hints = document.createElement('div');
+    hints.className = 'flex gap-3 text-xs';
+    hints.innerHTML = `
+      <span class="text-pink-400">❤️ +${post.engage}</span>
+      <span class="${post.ban>0?'text-red-400':'text-green-400'}">🚨 ${post.ban>0?'+'+post.ban+'%':'安全'}</span>`;
+
+    card.appendChild(badgeEl);
+    card.appendChild(textEl);
+    card.appendChild(hints);
+
+    card.onclick = () => choosePost(post);
+    card.onkeydown = (e) => { if(e.key==='Enter'||e.key===' ') choosePost(post); };
+    container.appendChild(card);
+  });
+}
+
+function choosePost(post) {
+  // Calculate outcomes
+  const followerGain = Math.round(post.engage * 0.5 * (0.8 + Math.random()*0.4));
+  const likeGain = Math.round(post.engage * (1 + Math.random()*0.5));
+  const banIncrease = post.ban + Math.round(Math.random()*5);
+
+  state.likes += likeGain;
+  state.followers = Math.max(0, state.followers + followerGain - Math.round(banIncrease*0.5));
+  state.engage = Math.min(100, state.engage + post.engage * 0.3);
+  state.ban = Math.min(100, state.ban + banIncrease * 0.4);
+  state.score += likeGain + followerGain * 2 - Math.round(state.ban * 3);
+
+  // Events
+  let events = [];
+  if (likeGain > 40) events.push({ type: 'good', msg: `🔥 バズった！ +${likeGain}いいね` });
+  else events.push({ type: 'info', msg: `❤️ +${likeGain}いいね、👥 +${followerGain}フォロワー` });
+  if (post.ban > 20) events.push({ type: 'warn', msg: `⚠️ 通報が増えています！BAN危険度↑` });
+  if (Math.random() < 0.2 && state.ban > 20) events.push({ type: 'bad', msg: `😡 炎上コメント殺到！フォロワー-${Math.round(followerGain*0.3)}` });
+
+  events.forEach(ev => addLog(ev.msg, ev.type));
+
+  state.turn++;
+
+  // Ban check
+  if (state.ban >= 80) {
+    state.banned = true;
+    setTimeout(() => endGame(true), 500);
+    return;
+  }
+
+  updateMetrics();
+
+  if (state.turn > state.maxTurns) {
+    setTimeout(() => endGame(false), 500);
+  } else {
+    renderPosts();
+  }
+}
+
+function addLog(msg, type) {
+  const log = document.getElementById('event-log');
+  const el = document.createElement('div');
+  const colorMap = { good:'text-green-400', warn:'text-yellow-400', bad:'text-red-400', info:'text-gray-400' };
+  el.className = 'text-xs py-0.5 ' + (colorMap[type]||'text-gray-400');
+  el.textContent = msg;
+  log.prepend(el);
+}
+
+function updateMetrics() {
+  document.getElementById('m-likes').textContent = state.likes.toLocaleString();
+  document.getElementById('m-followers').textContent = state.followers.toLocaleString();
+  document.getElementById('m-score').textContent = Math.max(0,state.score).toLocaleString();
+  document.getElementById('m-ban').textContent = Math.round(state.ban) + '%';
+  document.getElementById('bar-engage').style.width = Math.min(100, state.engage) + '%';
+  document.getElementById('bar-ban').style.width = Math.min(100, state.ban) + '%';
+}
+
+function endGame(banned) {
+  document.getElementById('post-options').innerHTML = '';
+  const go = document.getElementById('game-over');
+  go.style.display = 'flex';
+
+  if (banned) {
+    document.getElementById('go-emoji').textContent = '🚫';
+    document.getElementById('go-title').textContent = 'アカウントBAN！';
+    document.getElementById('go-desc').textContent = `炎上リスクが高すぎてBANされました。最終フォロワー: ${state.followers}人`;
+  } else {
+    const sc = Math.max(0, state.score);
+    let emoji='🏆', title='ゲームクリア！', desc='';
+    if (sc > 5000) { emoji='👑'; title='インフルエンサー誕生！'; desc='エンゲージメントとリスクのバランスが完璧！'; }
+    else if (sc > 2000) { emoji='⭐'; title='人気クリエイター！'; desc='着実にフォロワーを増やしました。'; }
+    else { emoji='📱'; title='ゲームクリア！'; desc='安全重視でコツコツと積み上げました。'; }
+    document.getElementById('go-emoji').textContent = emoji;
+    document.getElementById('go-title').textContent = title;
+    document.getElementById('go-desc').textContent = desc + `\nフォロワー: ${state.followers}人`;
+  }
+  document.getElementById('go-score').textContent = Math.max(0, state.score).toLocaleString();
+}
+
+startGame();
+</script>
+</body>
+</html>
